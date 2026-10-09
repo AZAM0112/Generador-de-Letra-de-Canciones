@@ -1,5 +1,6 @@
 # Necesarios
 faster-whisper>=1.0      # reconocimiento de voz (Whisper) con tiempos por palabra
+av>=13                   # lectura de audio (versiones antiguas fallan con faster-whisper reciente)
 Pillow>=10.1             # dibujo de la letra
 imageio-ffmpeg>=0.4      # trae ffmpeg si no lo tienes instalado en el sistema
 
