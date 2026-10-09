@@ -28,6 +28,26 @@ _ALUCINACIONES = (
 )
 
 
+def cargar_audio(audio: Path):
+    """Decodifica el audio a 16 kHz mono (float32) con ffmpeg.
+
+    Así no dependemos de la librería `av`, cuyas versiones antiguas fallan con faster-whisper.
+    """
+    import numpy as np
+
+    from .render import buscar_ffmpeg
+
+    resultado = subprocess.run(
+        [buscar_ffmpeg(), "-nostdin", "-loglevel", "error", "-i", str(audio),
+         "-vn", "-ac", "1", "-ar", "16000", "-f", "f32le", "-"],
+        capture_output=True,
+    )
+    if resultado.returncode != 0 or not resultado.stdout:
+        detalle = resultado.stderr.decode("utf-8", errors="replace").strip()[-300:]
+        raise RuntimeError(f"No se pudo leer el audio {audio}: {detalle}")
+    return np.frombuffer(resultado.stdout, dtype=np.float32)
+
+
 def hay_gpu() -> bool:
     try:
         import ctranslate2
@@ -113,7 +133,7 @@ def transcribir(
     if "hallucination_silence_threshold" in inspect.signature(whisper.transcribe).parameters:
         opciones["hallucination_silence_threshold"] = 2.0
 
-    segmentos, info = whisper.transcribe(str(audio), **opciones)
+    segmentos, info = whisper.transcribe(cargar_audio(audio), **opciones)
     progreso("Transcribiendo...")
     palabras: List[Palabra] = []
     ultimo_aviso = -1

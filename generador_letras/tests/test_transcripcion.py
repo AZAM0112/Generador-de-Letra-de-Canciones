@@ -48,6 +48,7 @@ class Transcribir(unittest.TestCase):
         parche.start()
         self.addCleanup(parche.stop)
         mock.patch.object(transcripcion, "hay_gpu", return_value=False).start()
+        mock.patch.object(transcripcion, "cargar_audio", return_value="audio-simulado").start()
         self.addCleanup(mock.patch.stopall)
 
     def test_devuelve_palabras_con_tiempos_y_filtra_alucinaciones(self):
@@ -105,3 +106,20 @@ class SepararVoz(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class CargarAudio(unittest.TestCase):
+    @unittest.skipUnless(__import__("shutil").which("ffmpeg"), "ffmpeg no instalado")
+    def test_decodifica_a_16khz_mono(self):
+        import subprocess, tempfile
+        with tempfile.TemporaryDirectory() as tmp:
+            wav = Path(tmp) / "a.wav"
+            subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-f", "lavfi", "-i",
+                            "sine=frequency=300:duration=2", str(wav)], check=True)
+            datos = transcripcion.cargar_audio(wav)
+        self.assertEqual(datos.dtype.name, "float32")
+        self.assertAlmostEqual(len(datos) / 16000, 2.0, delta=0.05)
+
+    def test_archivo_inexistente(self):
+        with self.assertRaises(RuntimeError):
+            transcripcion.cargar_audio(Path("no_existe.mp3"))
