@@ -1,0 +1,25 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Generar videos de letras (carpeta canciones)",
+      "type": "shell",
+      "command": "py -3.12 generar.py",
+      "group": { "kind": "build", "isDefault": true },
+      "presentation": { "reveal": "always", "panel": "dedicated" },
+      "problemMatcher": []
+    },
+    {
+      "label": "Solo crear JSON de letra para revisar",
+      "type": "shell",
+      "command": "py -3.12 generar.py --solo-json",
+      "problemMatcher": []
+    },
+    {
+      "label": "Rehacer videos (usa los JSON revisados)",
+      "type": "shell",
+      "command": "py -3.12 generar.py --forzar",
+      "problemMatcher": []
+    }
+  ]
+}
