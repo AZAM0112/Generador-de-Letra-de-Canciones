@@ -37,6 +37,17 @@ class Lote(unittest.TestCase):
             fallidas = lote.procesar_carpeta(self.dir, progreso=lambda m: None)
         self.assertEqual(fallidas, ["A.mp3"])
 
+    def test_cancion_elige_solo_una_ignorando_tildes_y_mayusculas(self):
+        (self.dir / "TÓMALO - Hillsong.mp3").write_bytes(b"x")
+        g, fallidas = self.correr(forzar=True, cancion="tomalo")
+        self.assertEqual([c.args[0].name for c in g.call_args_list], ["TÓMALO - Hillsong.mp3"])
+        self.assertEqual(fallidas, [])
+
+    def test_cancion_que_no_existe_se_informa_como_error(self):
+        g, fallidas = self.correr(cancion="zzz")
+        g.assert_not_called()
+        self.assertEqual(fallidas, ["zzz"])
+
     def test_carpeta_inexistente(self):
         with self.assertRaises(FileNotFoundError):
             lote.procesar_carpeta(self.dir / "no", progreso=lambda m: None)

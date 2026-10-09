@@ -27,6 +27,8 @@ Documentación completa, guía para mejorar la precisión y formato del JSON: [g
 4. Si corriges el JSON, rehaz el video con `py -3.12 generar.py --forzar`: usa el JSON, no vuelve a transcribir.
    (Para transcribir de nuevo, borra el JSON.)
 
+Para rehacer **una sola** canción: `py -3.12 generar.py --forzar --cancion tomalo` (basta con parte del nombre, sin importar tildes ni mayúsculas).
+
 Las canciones que ya tienen video se omiten; una canción con error no detiene a las demás.
 
 ## Con GitHub (sin instalar nada en tu PC)

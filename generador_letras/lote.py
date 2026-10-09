@@ -20,6 +20,7 @@ from pathlib import Path
 from typing import List, Optional
 
 from . import generar_video_letra
+from .alineacion import normalizar
 
 EXTENSIONES_AUDIO = {".mp3", ".wav", ".m4a", ".flac", ".ogg", ".aac"}
 
@@ -31,6 +32,7 @@ def procesar_carpeta(
     modelo: Optional[str] = None,
     separar_voz: bool = False,
     solo_json: bool = False,
+    cancion: Optional[str] = None,
     progreso=print,
 ) -> List[str]:
     """Procesa cada audio de la carpeta. Devuelve la lista de canciones que fallaron."""
@@ -38,6 +40,12 @@ def procesar_carpeta(
     if not carpeta.is_dir():
         raise FileNotFoundError(f"No existe la carpeta: {carpeta}")
     audios = sorted(p for p in carpeta.iterdir() if p.suffix.lower() in EXTENSIONES_AUDIO)
+    if cancion:
+        buscado = normalizar(cancion)
+        audios = [a for a in audios if buscado in normalizar(a.stem)]
+        if not audios:
+            progreso(f"No hay ningún audio cuyo nombre contenga '{cancion}' en {carpeta}.")
+            return [cancion]
     if not audios:
         progreso(f"No hay audios ({', '.join(sorted(EXTENSIONES_AUDIO))}) en {carpeta}.")
         return []
@@ -73,6 +81,7 @@ def main(argv=None) -> int:
         prog="generar", description="Genera los videos de todas las canciones de una carpeta."
     )
     p.add_argument("carpeta", nargs="?", default="canciones", help="carpeta con los audios (por defecto: canciones)")
+    p.add_argument("--cancion", help="procesa solo la canción cuyo nombre contenga este texto (sin importar tildes ni mayúsculas)")
     p.add_argument("--forzar", action="store_true", help="rehace los videos aunque ya existan")
     p.add_argument("--modelo", help="modelo Whisper: small, medium, large-v3...")
     p.add_argument("--separar-voz", action="store_true", help="aísla la voz con Demucs")
@@ -80,7 +89,7 @@ def main(argv=None) -> int:
     a = p.parse_args(argv)
     try:
         fallidas = procesar_carpeta(
-            a.carpeta, forzar=a.forzar, modelo=a.modelo, separar_voz=a.separar_voz, solo_json=a.solo_json
+            a.carpeta, forzar=a.forzar, modelo=a.modelo, separar_voz=a.separar_voz, solo_json=a.solo_json, cancion=a.cancion
         )
     except FileNotFoundError as e:
         print(f"Error: {e}", file=sys.stderr)

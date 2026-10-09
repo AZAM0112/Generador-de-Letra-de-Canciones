@@ -5,8 +5,14 @@
       "label": "Generar videos de letras (carpeta canciones)",
       "type": "shell",
       "command": "py -3.12 generar.py",
-      "group": { "kind": "build", "isDefault": true },
-      "presentation": { "reveal": "always", "panel": "dedicated" },
+      "group": {
+        "kind": "build",
+        "isDefault": true
+      },
+      "presentation": {
+        "reveal": "always",
+        "panel": "dedicated"
+      },
       "problemMatcher": []
     },
     {
@@ -20,6 +26,19 @@
       "type": "shell",
       "command": "py -3.12 generar.py --forzar",
       "problemMatcher": []
+    },
+    {
+      "label": "Rehacer UNA canción (usa su JSON revisado)",
+      "type": "shell",
+      "command": "py -3.12 generar.py --forzar --cancion \"${input:cancion}\"",
+      "problemMatcher": []
+    }
+  ],
+  "inputs": [
+    {
+      "id": "cancion",
+      "type": "promptString",
+      "description": "Parte del nombre de la canción (ej. tomalo)"
     }
   ]
 }
