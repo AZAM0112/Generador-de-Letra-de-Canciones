@@ -130,7 +130,7 @@ def _componer_bloque(
     while True:
         fuente = _fuente(ruta_fuente, tam)
         por_verso = [_envolver(t, fuente, ancho_max) for t in textos]
-        alto_linea, hueco = int(tam * 1.22), int(tam * 0.45)
+        alto_linea, hueco = int(tam * 1.15), int(tam * 0.35)
         alto = sum(len(ls) for ls in por_verso) * alto_linea + hueco * (len(por_verso) - 1)
         ancho = max(fuente.getlength(l) for ls in por_verso for l in ls)
         if (alto <= alto_max and ancho <= ancho_max) or tam <= tam_min:
@@ -164,6 +164,7 @@ class Escena:
     def __init__(
         self, titulo: str, paginas: List[Pagina], *, ancho: int, alto: int,
         fuente: Optional[str], fondo: Tuple[int, int, int], lead_in: float,
+        escala: float = 1.0,
     ):
         self.ancho, self.alto, self.fondo = ancho, alto, fondo
         ruta = _buscar_fuente(fuente)
@@ -176,7 +177,7 @@ class Escena:
         self.bloques = [
             _componer_bloque(
                 [v.texto for v in p.versos], ruta,
-                ancho / 2 * 0.90, alto * 0.80, int(alto * 0.072), int(alto * 0.036),
+                ancho / 2 * 0.92, alto * 0.90, int(alto * 0.13 * escala), int(alto * 0.04),
             )
             for p in paginas
         ]
@@ -251,6 +252,7 @@ def renderizar_video(
     audio: Path, salida: Path, titulo: str, versos: List[Verso], *,
     ancho: int = 1920, alto: int = 1080, fps: int = 30,
     fuente: Optional[str] = None, fondo: Tuple[int, int, int] = (0, 0, 0),
+    escala_letra: float = 1.0,
     progreso: Callable[[str], None] = print,
 ) -> Path:
     """Crea el MP4: la letra animada con el audio original de la canción."""
@@ -267,7 +269,7 @@ def renderizar_video(
     # Si la voz entra casi al inicio, se antepone un silencio para que el título se vea.
     lead_in = max(0.0, TITULO_MIN + VISTA_PREVIA - paginas[0].inicio)
     escena = Escena(
-        titulo, paginas, ancho=ancho, alto=alto, fuente=fuente, fondo=fondo, lead_in=lead_in
+        titulo, paginas, ancho=ancho, alto=alto, fuente=fuente, fondo=fondo, lead_in=lead_in, escala=escala_letra,
     )
     total = int(math.ceil((lead_in + duracion) * fps))
 

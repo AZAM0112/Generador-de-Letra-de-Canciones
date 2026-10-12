@@ -42,6 +42,7 @@ def generar_video_letra(
     fps: int = 30,
     fuente: Optional[str] = None,
     fondo: Tuple[int, int, int] = (0, 0, 0),
+    escala_letra: float = 1.0,
     dispositivo: str = "auto",
     vad: bool = False,
     progreso: Callable[[str], None] = print,
@@ -58,6 +59,8 @@ def generar_video_letra(
     modelo       Modelo Whisper ('tiny', 'small', 'medium', 'large-v3' o ruta local).
     separar_voz  Aísla la voz con Demucs antes de transcribir (mejora mucho con banda).
     desde_json   Usa un JSON de letra ya revisado y se salta la transcripción.
+    escala_letra Multiplica el tamaño máximo de la letra (1.0 = grande; 0.8 = más chica). Siempre
+                 se ajusta para que quepan los dos versos.
     solo_json    Solo genera el JSON de letra (para revisarlo) y no crea el video.
 
     Devuelve la ruta del MP4 (o del JSON si `solo_json=True`).
@@ -102,5 +105,5 @@ def generar_video_letra(
 
     return renderizar_video(
         audio, salida, titulo, versos, ancho=resolucion[0], alto=resolucion[1],
-        fps=fps, fuente=fuente, fondo=fondo, progreso=progreso,
+        fps=fps, fuente=fuente, fondo=fondo, escala_letra=escala_letra, progreso=progreso,
     )

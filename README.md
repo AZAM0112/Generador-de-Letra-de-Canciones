@@ -40,3 +40,7 @@ Las canciones que ya tienen video se omiten; una canción con error no detiene a
 
 Notas: usa un repositorio **privado** si subes audios con derechos de autor. En GitHub el
 procesamiento es solo con CPU y una canción puede tardar varios minutos (el límite del trabajo es 4 h).
+
+## Tamaño de la letra
+
+La letra ya sale grande (se ajusta sola para que quepan los dos versos). Para cambiarlo: `py -3.12 generar.py --forzar --tamano-letra 0.8` (más chica) o `1.2` (más grande, si cabe).

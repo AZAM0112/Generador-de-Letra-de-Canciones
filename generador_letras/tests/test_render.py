@@ -80,6 +80,24 @@ class EscenaVisual(unittest.TestCase):
         self.assertEqual(e.operaciones(7.0), e.operaciones(7.2))
 
 
+class TamanoLetra(unittest.TestCase):
+    def test_letra_grande_y_dos_versos_caben_en_su_mitad(self):
+        versos = [Verso("Tómalo, tómalo todo, mi vida", 5, 8), Verso("Aquí estoy delante de ti Señor", 8.5, 11)]
+        e = Escena("T", versos_a_paginas(versos), ancho=1920, alto=1080, fuente=None,
+                   fondo=(0, 0, 0), lead_in=0)
+        x0, y0, x1, y1 = e.bloques[0].getbbox()  # solo la tinta, sin márgenes transparentes
+        self.assertLessEqual(x1 - x0, 1920 / 2 * 0.92 + 1)
+        self.assertLessEqual(y1 - y0, 1080 * 0.90 + 1)
+        self.assertGreater(y1 - y0, 1080 * 0.5)  # ocupa bastante pantalla: letra bien grande
+
+    def test_escala_agranda_o_achica(self):
+        v = [Verso("Tu amor me sostiene", 5, 8)]
+        def alto(escala):
+            return Escena("T", versos_a_paginas(v), ancho=1920, alto=1080, fuente=None,
+                          fondo=(0, 0, 0), lead_in=0, escala=escala).bloques[0].size[1]
+        self.assertLess(alto(0.6), alto(1.0))
+
+
 class Titulo(unittest.TestCase):
     def test_titulo_desde_nombre_de_archivo(self):
         self.assertEqual(titulo_desde_nombre("/x/01_cuan_grande_es_dios.mp3"), "Cuan Grande Es Dios")
