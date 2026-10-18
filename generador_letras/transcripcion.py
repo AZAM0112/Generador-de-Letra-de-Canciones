@@ -89,6 +89,9 @@ def separar_voz(
     return voz
 
 
+_SEÑALES_CUDA = ("cublas", "cudnn", "cuda", "libcu", "nvcuda", "nvrtc")
+
+
 def transcribir(
     audio: Path,
     *,
@@ -99,7 +102,35 @@ def transcribir(
     vad: bool = False,
     progreso: Callable[[str], None] = print,
 ) -> List[Palabra]:
-    """Transcribe `audio` y devuelve cada palabra con su inicio y fin en segundos."""
+    """Transcribe `audio` y devuelve cada palabra con su inicio y fin en segundos.
+
+    Con `dispositivo="auto"` usa la GPU NVIDIA si existe; si sus librerías CUDA no están
+    instaladas (error típico: "cublas64_12.dll not found"), continúa solo con la CPU.
+    """
+    gpu = hay_gpu() if dispositivo == "auto" else dispositivo == "cuda"
+    opciones = dict(idioma=idioma, prompt=prompt, vad=vad, progreso=progreso)
+    try:
+        return _transcribir_en(audio, gpu=gpu, modelo=modelo or ("large-v3" if gpu else "medium"), **opciones)
+    except Exception as e:
+        if not (gpu and dispositivo == "auto" and any(x in str(e).lower() for x in _SEÑALES_CUDA)):
+            raise
+        progreso(
+            "AVISO: la GPU no se pudo usar (faltan las librerías CUDA de NVIDIA). "
+            "Se continúa con la CPU, que es más lenta."
+        )
+        return _transcribir_en(audio, gpu=False, modelo=modelo or "medium", **opciones)
+
+
+def _transcribir_en(
+    audio: Path,
+    *,
+    gpu: bool,
+    modelo: str,
+    idioma: str,
+    prompt: Optional[str],
+    vad: bool,
+    progreso: Callable[[str], None],
+) -> List[Palabra]:
     try:
         from faster_whisper import WhisperModel
     except ImportError as e:
@@ -107,8 +138,6 @@ def transcribir(
             "Falta faster-whisper. Instálalo con:  pip install -r generador_letras/requirements.txt"
         ) from e
 
-    gpu = hay_gpu() if dispositivo == "auto" else dispositivo == "cuda"
-    modelo = modelo or ("large-v3" if gpu else "medium")
     progreso(f"Cargando modelo Whisper '{modelo}' ({'GPU' if gpu else 'CPU'})...")
     try:
         whisper = WhisperModel(

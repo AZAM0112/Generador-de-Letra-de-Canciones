@@ -67,6 +67,32 @@ class Transcribir(unittest.TestCase):
             transcripcion.transcribir(Path("x.mp3"), progreso=lambda m: None)
         self.assertEqual(_ModeloFalso.llamadas[0], ("init", "large-v3", "cuda", "float16"))
 
+    def test_si_falla_cuda_en_auto_continua_con_cpu(self):
+        intentos = []
+
+        class Modelo(_ModeloFalso):
+            def __init__(self, nombre, device="cpu", compute_type="default", **kw):
+                intentos.append((nombre, device))
+                if device == "cuda":
+                    raise RuntimeError("Library cublas64_12.dll is not found or cannot be loaded")
+
+        sys.modules["faster_whisper"].WhisperModel = Modelo
+        mensajes = []
+        with mock.patch.object(transcripcion, "hay_gpu", return_value=True):
+            ps = transcripcion.transcribir(Path("x.mp3"), progreso=mensajes.append)
+        self.assertEqual(intentos, [("large-v3", "cuda"), ("medium", "cpu")])
+        self.assertEqual(len(ps), 5)
+        self.assertTrue(any("AVISO" in m for m in mensajes))
+
+    def test_si_se_pide_cuda_explicitamente_el_error_se_muestra(self):
+        class Modelo(_ModeloFalso):
+            def __init__(self, *a, **kw):
+                raise RuntimeError("cublas64_12.dll not found")
+
+        sys.modules["faster_whisper"].WhisperModel = Modelo
+        with self.assertRaises(RuntimeError):
+            transcripcion.transcribir(Path("x.mp3"), dispositivo="cuda", progreso=lambda m: None)
+
     def test_opciones_para_cantos(self):
         transcripcion.transcribir(Path("x.mp3"), idioma="es", prompt="Aleluya", progreso=lambda m: None)
         opciones = _ModeloFalso.llamadas[1][2]
