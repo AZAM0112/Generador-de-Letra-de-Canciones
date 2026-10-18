@@ -44,3 +44,16 @@ procesamiento es solo con CPU y una canción puede tardar varios minutos (el lí
 ## Tamaño de la letra
 
 La letra ya sale grande (se ajusta sola para que quepan los dos versos). Para cambiarlo: `py -3.12 generar.py --forzar --tamano-letra 0.8` (más chica) o `1.2` (más grande, si cabe).
+
+## GPU NVIDIA (más rápido y preciso, automático)
+
+El programa elige solo, con el mismo Ctrl+Shift+B en cualquier laptop:
+- **Con GPU NVIDIA:** modelo `large-v3` en la GPU (el más preciso).
+- **Sin GPU:** modelo `medium` en CPU.
+- Si la GPU falla (faltan librerías, poca memoria), avisa y continúa con la CPU.
+
+En la laptop con NVIDIA, instala una vez las librerías CUDA:
+```
+py -3.12 -m pip install -r generador_letras\requirements-gpu.txt
+```
+y mantén actualizado el driver de NVIDIA. En la otra laptop no hace falta.

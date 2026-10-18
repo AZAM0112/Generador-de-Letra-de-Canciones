@@ -1,0 +1,5 @@
+# Solo para laptops con tarjeta NVIDIA: librerías CUDA que usa Whisper en la GPU.
+# Instalar una vez:  py -3.12 -m pip install -r generador_letras\requirements-gpu.txt
+# (Requiere un driver NVIDIA actualizado compatible con CUDA 12.)
+nvidia-cublas-cu12
+nvidia-cudnn-cu12==9.*

@@ -62,10 +62,10 @@ class Transcribir(unittest.TestCase):
         transcripcion.transcribir(Path("x.mp3"), progreso=lambda m: None)
         self.assertEqual(_ModeloFalso.llamadas[0], ("init", "medium", "cpu", "int8"))
 
-    def test_gpu_usa_large_v3_float16(self):
+    def test_gpu_usa_large_v3_en_gpu(self):
         with mock.patch.object(transcripcion, "hay_gpu", return_value=True):
             transcripcion.transcribir(Path("x.mp3"), progreso=lambda m: None)
-        self.assertEqual(_ModeloFalso.llamadas[0], ("init", "large-v3", "cuda", "float16"))
+        self.assertEqual(_ModeloFalso.llamadas[0], ("init", "large-v3", "cuda", "int8_float16"))
 
     def test_si_falla_cuda_en_auto_continua_con_cpu(self):
         intentos = []
@@ -118,6 +118,28 @@ class Transcribir(unittest.TestCase):
         with mock.patch.dict(sys.modules, {"faster_whisper": None}):
             with self.assertRaisesRegex(RuntimeError, "faster-whisper"):
                 transcripcion.transcribir(Path("x.mp3"), progreso=lambda m: None)
+
+
+class DllsNvidia(unittest.TestCase):
+    def test_en_windows_registra_las_carpetas_bin_de_nvidia(self):
+        import os, tempfile
+        with tempfile.TemporaryDirectory() as tmp:
+            bin_ = Path(tmp) / "cublas" / "bin"
+            bin_.mkdir(parents=True)
+            spec = types.SimpleNamespace(submodule_search_locations=[tmp])
+            agregadas = []
+            with mock.patch.object(transcripcion.sys, "platform", "win32"), \
+                 mock.patch("importlib.util.find_spec", return_value=spec), \
+                 mock.patch.object(os, "add_dll_directory", agregadas.append, create=True), \
+                 mock.patch.dict(os.environ, {"PATH": "x"}):
+                transcripcion.registrar_dlls_nvidia()
+                self.assertTrue(os.environ["PATH"].startswith(str(bin_)))
+        self.assertEqual(agregadas, [str(bin_)])
+
+    def test_fuera_de_windows_no_hace_nada(self):
+        with mock.patch.object(transcripcion.sys, "platform", "linux"), \
+             mock.patch("importlib.util.find_spec", side_effect=AssertionError):
+            transcripcion.registrar_dlls_nvidia()
 
 
 class SepararVoz(unittest.TestCase):

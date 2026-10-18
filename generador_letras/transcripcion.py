@@ -48,7 +48,29 @@ def cargar_audio(audio: Path):
     return np.frombuffer(resultado.stdout, dtype=np.float32)
 
 
+def registrar_dlls_nvidia() -> None:
+    """En Windows, hace visibles las DLL de CUDA instaladas con pip (nvidia-cublas-cu12, ...).
+
+    Así no hace falta tocar el PATH: basta con `pip install -r generador_letras/requirements-gpu.txt`.
+    """
+    if sys.platform != "win32":
+        return
+    import importlib.util
+    import os
+
+    try:
+        paquete = importlib.util.find_spec("nvidia")
+    except (ImportError, ValueError):
+        return
+    for raiz in (paquete.submodule_search_locations or []) if paquete else []:
+        for sub in Path(raiz).glob("*/bin"):
+            os.environ["PATH"] = str(sub) + os.pathsep + os.environ.get("PATH", "")
+            if hasattr(os, "add_dll_directory"):
+                os.add_dll_directory(str(sub))
+
+
 def hay_gpu() -> bool:
+    registrar_dlls_nvidia()
     try:
         import ctranslate2
 
@@ -89,7 +111,7 @@ def separar_voz(
     return voz
 
 
-_SEÑALES_CUDA = ("cublas", "cudnn", "cuda", "libcu", "nvcuda", "nvrtc")
+_SEÑALES_CUDA = ("cublas", "cudnn", "cuda", "libcu", "nvcuda", "nvrtc", "out of memory", "compute type")
 
 
 def transcribir(
@@ -115,7 +137,7 @@ def transcribir(
         if not (gpu and dispositivo == "auto" and any(x in str(e).lower() for x in _SEÑALES_CUDA)):
             raise
         progreso(
-            "AVISO: la GPU no se pudo usar (faltan las librerías CUDA de NVIDIA). "
+            "AVISO: la GPU no se pudo usar (faltan las librerías CUDA, no hay memoria suficiente o no es compatible). "
             "Se continúa con la CPU, que es más lenta."
         )
         return _transcribir_en(audio, gpu=False, modelo=modelo or "medium", **opciones)
@@ -131,6 +153,7 @@ def _transcribir_en(
     vad: bool,
     progreso: Callable[[str], None],
 ) -> List[Palabra]:
+    registrar_dlls_nvidia()
     try:
         from faster_whisper import WhisperModel
     except ImportError as e:
@@ -141,7 +164,7 @@ def _transcribir_en(
     progreso(f"Cargando modelo Whisper '{modelo}' ({'GPU' if gpu else 'CPU'})...")
     try:
         whisper = WhisperModel(
-            modelo, device="cuda" if gpu else "cpu", compute_type="float16" if gpu else "int8"
+            modelo, device="cuda" if gpu else "cpu", compute_type="int8_float16" if gpu else "int8"
         )
     except Exception as e:
         raise RuntimeError(
