@@ -111,7 +111,8 @@ def separar_voz(
     return voz
 
 
-_SEÑALES_CUDA = ("cublas", "cudnn", "cuda", "libcu", "nvcuda", "nvrtc", "out of memory", "compute type")
+_SEÑALES_CUDA = ("cublas", "cudnn", "cuda", "libcu", "nvcuda", "nvrtc", "out of memory", "compute type",
+                   "mkl_malloc", "allocate memory", "bad_alloc")
 
 
 def transcribir(
@@ -167,11 +168,18 @@ def _transcribir_en(
             modelo, device="cuda" if gpu else "cpu", compute_type="int8_float16" if gpu else "int8"
         )
     except Exception as e:
-        raise RuntimeError(
-            f"No se pudo cargar el modelo Whisper '{modelo}': {e}\n"
-            "La primera vez el modelo se descarga de internet (huggingface.co). Si no hay "
-            "conexión, descárgalo antes y pasa su carpeta con --modelo RUTA."
-        ) from e
+        texto = str(e).lower()
+        if any(x in texto for x in ("mkl_malloc", "allocate memory", "bad_alloc", "out of memory")):
+            ayuda = (
+                "Falta memoria RAM. Cierra otros programas (navegador, etc.), reinicia el equipo "
+                "o usa un modelo más liviano con --modelo medium (o small)."
+            )
+        else:
+            ayuda = (
+                "La primera vez el modelo se descarga de internet (huggingface.co). Si no hay "
+                "conexión, descárgalo antes y pasa su carpeta con --modelo RUTA."
+            )
+        raise RuntimeError(f"No se pudo cargar el modelo Whisper '{modelo}': {e}\n{ayuda}") from e
 
     opciones = dict(
         language=idioma,

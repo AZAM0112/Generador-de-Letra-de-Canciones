@@ -93,6 +93,18 @@ class Transcribir(unittest.TestCase):
         with self.assertRaises(RuntimeError):
             transcripcion.transcribir(Path("x.mp3"), dispositivo="cuda", progreso=lambda m: None)
 
+    def test_falta_de_ram_cae_a_cpu_y_el_mensaje_no_culpa_a_internet(self):
+        class Modelo(_ModeloFalso):
+            def __init__(self, nombre, device="cpu", **kw):
+                if nombre == "large-v3":
+                    raise RuntimeError("mkl_malloc: failed to allocate memory")
+
+        sys.modules["faster_whisper"].WhisperModel = Modelo
+        with mock.patch.object(transcripcion, "hay_gpu", return_value=True):
+            self.assertEqual(len(transcripcion.transcribir(Path("x.mp3"), progreso=lambda m: None)), 5)
+        with self.assertRaisesRegex(RuntimeError, "memoria RAM"):
+            transcripcion.transcribir(Path("x.mp3"), modelo="large-v3", dispositivo="cpu", progreso=lambda m: None)
+
     def test_opciones_para_cantos(self):
         transcripcion.transcribir(Path("x.mp3"), idioma="es", prompt="Aleluya", progreso=lambda m: None)
         opciones = _ModeloFalso.llamadas[1][2]
