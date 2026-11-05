@@ -42,6 +42,8 @@ class _ModeloFalso:
 class Transcribir(unittest.TestCase):
     def setUp(self):
         _ModeloFalso.llamadas = []
+        transcripcion.liberar_modelos()
+        self.addCleanup(transcripcion.liberar_modelos)
         falso = types.ModuleType("faster_whisper")
         falso.WhisperModel = _ModeloFalso
         parche = mock.patch.dict(sys.modules, {"faster_whisper": falso})
@@ -104,6 +106,12 @@ class Transcribir(unittest.TestCase):
             self.assertEqual(len(transcripcion.transcribir(Path("x.mp3"), progreso=lambda m: None)), 5)
         with self.assertRaisesRegex(RuntimeError, "memoria RAM"):
             transcripcion.transcribir(Path("x.mp3"), modelo="large-v3", dispositivo="cpu", progreso=lambda m: None)
+
+    def test_el_modelo_se_carga_una_sola_vez(self):
+        transcripcion.transcribir(Path("x.mp3"), progreso=lambda m: None)
+        transcripcion.transcribir(Path("y.mp3"), progreso=lambda m: None)
+        self.assertEqual([c[0] for c in _ModeloFalso.llamadas].count("init"), 1)
+        self.assertIsInstance(transcripcion.modelo_en_memoria(), _ModeloFalso)
 
     def test_opciones_para_cantos(self):
         transcripcion.transcribir(Path("x.mp3"), idioma="es", prompt="Aleluya", progreso=lambda m: None)

@@ -165,6 +165,7 @@ class Escena:
         self, titulo: str, paginas: List[Pagina], *, ancho: int, alto: int,
         fuente: Optional[str], fondo: Tuple[int, int, int], lead_in: float,
         escala: float = 1.0,
+        bpm: Optional[float] = None,
     ):
         self.ancho, self.alto, self.fondo = ancho, alto, fondo
         ruta = _buscar_fuente(fuente)
@@ -186,12 +187,16 @@ class Escena:
         ini = [p.inicio + lead_in for p in paginas]
         fin = [p.fin + lead_in for p in paginas]
         # Con cantos seguidos y rápidos el desplazamiento se acorta para no solaparse.
+        # Con tempo conocido el desplazamiento dura medio tiempo musical y termina justo en el
+        # pulso en que empieza el verso: el texto "aterriza" amarillo con la música.
+        base = min(max(30.0 / bpm, 0.3), 0.6) if bpm else ANIM_DUR
         self.dur = [
-            ANIM_DUR if k == 0 else min(ANIM_DUR, max(0.15, 0.7 * (ini[k] - ini[k - 1])))
+            base if k == 0 else min(base, max(0.15, 0.7 * (ini[k] - ini[k - 1])))
             for k in range(n)
         ]
-        # La página empieza a moverse un poco antes de cantarse y llega ya amarilla.
-        self.t_in = [ini[k] - 0.6 * self.dur[k] for k in range(n)]
+        # Sin tempo, la página empieza a moverse un poco antes de cantarse y llega ya amarilla.
+        adelanto = 1.0 if bpm else 0.6
+        self.t_in = [ini[k] - adelanto * self.dur[k] for k in range(n)]
         self.titulo_fin = min(max(ini[0] - VISTA_PREVIA, TITULO_MIN), TITULO_MAX)
         # La siguiente página aparece a la derecha cuando la actual empieza a cantarse.
         self.aparece = [self.titulo_fin + 0.5] + [ini[k - 1] for k in range(1, n)]
@@ -253,6 +258,7 @@ def renderizar_video(
     ancho: int = 1920, alto: int = 1080, fps: int = 30,
     fuente: Optional[str] = None, fondo: Tuple[int, int, int] = (0, 0, 0),
     escala_letra: float = 1.0,
+    tempo_bpm: Optional[float] = None,
     progreso: Callable[[str], None] = print,
 ) -> Path:
     """Crea el MP4: la letra animada con el audio original de la canción."""
@@ -270,6 +276,7 @@ def renderizar_video(
     lead_in = max(0.0, TITULO_MIN + VISTA_PREVIA - paginas[0].inicio)
     escena = Escena(
         titulo, paginas, ancho=ancho, alto=alto, fuente=fuente, fondo=fondo, lead_in=lead_in, escala=escala_letra,
+        bpm=tempo_bpm,
     )
     total = int(math.ceil((lead_in + duracion) * fps))
 

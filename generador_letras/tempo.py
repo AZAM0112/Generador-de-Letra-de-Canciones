@@ -242,8 +242,8 @@ def ajustar_versos(
 def analizar_y_ajustar(
     audio: Path, versos: List[Verso], *, bpm: Optional[float] = None,
     progreso: Callable[[str], None] = print,
-) -> Optional[float]:
-    """Detecta el tempo del audio y ajusta los versos. Devuelve el BPM (o None si no fue fiable)."""
+) -> Optional[Pulso]:
+    """Detecta el tempo del audio y ajusta los versos. Devuelve el pulso (o None si no fue fiable)."""
     from .transcripcion import cargar_audio
 
     progreso("Analizando el tempo de la canción...")
@@ -264,4 +264,4 @@ def analizar_y_ajustar(
     progreso(f"  {movidos} versos ajustados al pulso; {len(dudosos)} marcados para revisar.")
     for v in dudosos[:10]:
         progreso(f"    {v.inicio:7.2f} s  {v.texto[:40]!r}: {v.revisar}")
-    return round(pulso.bpm, 1)
+    return pulso

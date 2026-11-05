@@ -11,7 +11,7 @@ import re
 from pathlib import Path
 from typing import Callable, Optional, Tuple, Union
 
-from .modelos import Pagina, Palabra, Verso, cargar_json, guardar_json
+from .modelos import Pagina, Palabra, Verso, cargar_json, guardar_json, pulso_de_json
 from .segmentacion import palabras_a_versos, versos_a_paginas
 
 __all__ = [
@@ -47,6 +47,7 @@ def generar_video_letra(
     vad: bool = False,
     ajustar_tempo: bool = True,
     bpm: Optional[float] = None,
+    segunda_pasada: bool = True,
     progreso: Callable[[str], None] = print,
 ) -> Path:
     """Convierte el audio completo de una canción en un MP4 con la letra animada.
@@ -67,6 +68,11 @@ def generar_video_letra(
     ajustar_tempo Detecta el tempo y ajusta el inicio de cada verso al pulso; marca con
                  "revisar" en el JSON los versos dudosos. No se aplica con `desde_json`.
     bpm          Fuerza el tempo (si la detección automática se equivoca).
+    segunda_pasada Alinea la letra real palabra por palabra (más preciso, algo más lento).
+
+    Revisión automática (cuando no se usa `desde_json`): reconocimiento -> emparejar con la
+    letra -> segunda pasada -> consistencia entre coros -> ajuste al pulso -> informe. Los
+    versos dudosos quedan con "revisar" en el JSON y se genera `<audio>_revisar.html`.
 
     Devuelve la ruta del MP4 (o del JSON si `solo_json=True`).
     """
@@ -79,35 +85,50 @@ def generar_video_letra(
     if desde_json:
         titulo_json, versos = cargar_json(desde_json)
         titulo = titulo or titulo_json or titulo_desde_nombre(audio)
+        tempo_bpm, pulso_inicio = pulso_de_json(desde_json)
+        _pagina_revision(audio, Path(desde_json), titulo, versos, tempo_bpm, pulso_inicio, progreso)
     else:
+        from . import transcripcion as tr
         from .alineacion import alinear_letra, palabras_clave_para_prompt
+        from .coros import armonizar_repeticiones
         from .render import buscar_ffmpeg, duracion_audio
-        from .transcripcion import PROMPT_BASE, transcribir_audio_cancion
 
         titulo = titulo or titulo_desde_nombre(audio)
         texto_letra = Path(letra).read_text(encoding="utf-8-sig") if letra else None
         prompt = None
         if texto_letra:
             vocabulario = palabras_clave_para_prompt(texto_letra)
-            prompt = f"{PROMPT_BASE} {vocabulario}" if vocabulario else None
-        detectadas = transcribir_audio_cancion(
-            audio, separar=separar_voz, modelo=modelo, idioma=idioma,
-            dispositivo=dispositivo, prompt=prompt, vad=vad, progreso=progreso,
-        )
-        if texto_letra:
-            palabras = alinear_letra(
-                texto_letra, detectadas, duracion_audio(audio, buscar_ffmpeg()), progreso
+            prompt = f"{tr.PROMPT_BASE} {vocabulario}" if vocabulario else None
+        with tr.audio_de_voz(audio, separar_voz, progreso) as voz:
+            detectadas = tr.transcribir(
+                voz, modelo=modelo, idioma=idioma, dispositivo=dispositivo,
+                prompt=prompt, vad=vad, progreso=progreso,
             )
-            versos = palabras_a_versos(palabras, cortar_por_pausa=False)
-        else:
-            versos = palabras_a_versos(detectadas)
-        tempo_bpm = None
+            if texto_letra:
+                palabras = alinear_letra(
+                    texto_letra, detectadas, duracion_audio(audio, buscar_ffmpeg()), progreso
+                )
+                versos = palabras_a_versos(palabras, cortar_por_pausa=False)
+                if segunda_pasada and tr.modelo_en_memoria() is not None:
+                    from .refinar import refinar_versos
+
+                    try:
+                        refinar_versos(tr.cargar_audio(voz), versos, tr.modelo_en_memoria(), idioma, progreso)
+                    except Exception as e:  # nunca deja peor el resultado de la primera pasada
+                        progreso(f"AVISO: no se pudo hacer la segunda pasada ({e}); se usan los tiempos previos.")
+            else:
+                versos = palabras_a_versos(detectadas)
+        armonizar_repeticiones(versos, progreso)
+        tempo_bpm = pulso_inicio = None
         if ajustar_tempo:
             from .tempo import analizar_y_ajustar
 
-            tempo_bpm = analizar_y_ajustar(audio, versos, bpm=bpm, progreso=progreso)
-        guardar_json(ruta_json, titulo, versos, tempo_bpm)
-        progreso(f"Letra y tiempos guardados en {ruta_json} (puedes corregirlos y usar --desde-json).")
+            pulso = analizar_y_ajustar(audio, versos, bpm=bpm, progreso=progreso)
+            if pulso is not None:
+                tempo_bpm, pulso_inicio = round(pulso.bpm, 2), float(pulso.tiempos[0])
+        guardar_json(ruta_json, titulo, versos, tempo_bpm, pulso_inicio)
+        _informe(versos, ruta_json, progreso)
+        _pagina_revision(audio, ruta_json, titulo, versos, tempo_bpm, pulso_inicio, progreso)
         if solo_json:
             return ruta_json
 
@@ -115,5 +136,32 @@ def generar_video_letra(
 
     return renderizar_video(
         audio, salida, titulo, versos, ancho=resolucion[0], alto=resolucion[1],
-        fps=fps, fuente=fuente, fondo=fondo, escala_letra=escala_letra, progreso=progreso,
+        fps=fps, fuente=fuente, fondo=fondo, escala_letra=escala_letra,
+        tempo_bpm=tempo_bpm, progreso=progreso,
     )
+
+
+def _informe(versos, ruta_json: Path, progreso: Callable[[str], None]) -> None:
+    progreso(f"Letra y tiempos guardados en {ruta_json}")
+    avisos = [v for v in versos if v.revisar]
+    if not avisos:
+        progreso(f"Revisión automática: los {len(versos)} versos pasaron todas las comprobaciones.")
+        return
+    progreso(
+        f"Revisión automática: {len(avisos)} de {len(versos)} versos con aviso "
+        f"(campo \"revisar\" en {ruta_json.name}):"
+    )
+    for v in avisos:
+        progreso(f"  {v.inicio:7.2f} s  {v.texto[:45]!r}: {v.revisar}")
+
+
+def _pagina_revision(audio, ruta_json, titulo, versos, tempo_bpm, pulso_inicio, progreso) -> None:
+    from .revision import generar_pagina_revision
+
+    try:
+        ruta = generar_pagina_revision(audio, ruta_json, titulo, versos, tempo_bpm, pulso_inicio)
+    except OSError as e:
+        progreso(f"AVISO: no se pudo crear la página de revisión ({e}).")
+        return
+    if any(v.revisar for v in versos):
+        progreso(f"Para revisar escuchando, abre: {ruta.name}")

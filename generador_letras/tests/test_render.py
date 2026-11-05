@@ -98,6 +98,36 @@ class TamanoLetra(unittest.TestCase):
         self.assertLess(alto(0.6), alto(1.0))
 
 
+class AnimacionAlPulso(unittest.TestCase):
+    def test_con_tempo_el_desplazamiento_dura_medio_tiempo_y_termina_en_el_pulso(self):
+        e = Escena("T", versos_a_paginas(VERSOS), ancho=640, alto=360, fuente=None,
+                   fondo=(0, 0, 0), lead_in=0, bpm=80)  # medio tiempo = 0.375 s
+        self.assertAlmostEqual(e.dur[0], 0.375)
+        self.assertAlmostEqual(e.t_in[0] + e.dur[0], VERSOS[0].inicio)
+
+    def test_sin_tempo_se_mantiene_la_animacion_de_siempre(self):
+        e = escena()
+        self.assertAlmostEqual(e.dur[0], 0.5)
+        self.assertAlmostEqual(e.t_in[0], VERSOS[0].inicio - 0.3)
+
+
+class PaginaDeRevision(unittest.TestCase):
+    def test_se_genera_con_los_datos_y_el_audio(self):
+        from generador_letras.revision import generar_pagina_revision
+        with tempfile.TemporaryDirectory() as tmp:
+            audio = Path(tmp) / "Mi canción.mp3"
+            versos = [Verso("Tu amor", 1, 2, revisar="entre dos pulsos"), Verso("</script>", 3, 4)]
+            ruta = generar_pagina_revision(audio, Path(tmp) / "Mi canción_letra.letra.json", "Mi canción",
+                                           versos, tempo_bpm=74.0, pulso_inicio=0.5)
+            html = ruta.read_text(encoding="utf-8")
+        self.assertEqual(ruta.name, "Mi canción_revisar.html")
+        self.assertIn('src="Mi%20canci%C3%B3n.mp3"', html)
+        self.assertIn('"tempo_bpm": 74.0', html)
+        self.assertIn("entre dos pulsos", html)
+        self.assertNotIn("</script>\"", html)  # el texto no puede cerrar el <script>
+        self.assertEqual(html.count("</script>"), 1)
+
+
 class Titulo(unittest.TestCase):
     def test_titulo_desde_nombre_de_archivo(self):
         self.assertEqual(titulo_desde_nombre("/x/01_cuan_grande_es_dios.mp3"), "Cuan Grande Es Dios")
@@ -167,7 +197,7 @@ class VideoMp4(unittest.TestCase):
         letra = self.dir / "letra.txt"
         letra.write_text("Tu amor me sostiene\n\nJesús\n", encoding="utf-8")
         with mock.patch(
-            "generador_letras.transcripcion.transcribir_audio_cancion", return_value=detectadas
+            "generador_letras.transcripcion.transcribir", return_value=detectadas
         ):
             salida = generar_video_letra(
                 self.audio, "Tu amor", self.dir / "f.mp4", letra=letra,
@@ -182,7 +212,7 @@ class VideoMp4(unittest.TestCase):
     def test_solo_json_no_crea_video(self):
         detectadas = [Palabra("Tu", 1, 2), Palabra("amor.", 2, 3, corte=True)]
         with mock.patch(
-            "generador_letras.transcripcion.transcribir_audio_cancion", return_value=detectadas
+            "generador_letras.transcripcion.transcribir", return_value=detectadas
         ):
             ruta = generar_video_letra(
                 self.audio, salida=self.dir / "s.mp4", solo_json=True, progreso=lambda m: None

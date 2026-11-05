@@ -28,6 +28,7 @@ class Verso:
     fin: float
     pagina_nueva: bool = False
     revisar: str = ""  # motivo por el que conviene revisar este verso a mano
+    confianza: float = 1.0  # parte de sus palabras que se escuchó en el audio (0-1); no va al JSON
 
     @property
     def num_palabras(self) -> int:
@@ -49,7 +50,10 @@ class Pagina:
         return max(v.fin for v in self.versos)
 
 
-def guardar_json(ruta, titulo: str, versos: List[Verso], tempo_bpm: Optional[float] = None) -> Path:
+def guardar_json(
+    ruta, titulo: str, versos: List[Verso], tempo_bpm: Optional[float] = None,
+    pulso_inicio: Optional[float] = None,
+) -> Path:
     """Guarda la letra con sus tiempos en un JSON que se puede revisar y corregir a mano."""
     registros = []
     for v in versos:
@@ -61,7 +65,9 @@ def guardar_json(ruta, titulo: str, versos: List[Verso], tempo_bpm: Optional[flo
         registros.append(registro)
     datos = {"titulo": titulo}
     if tempo_bpm:
-        datos["tempo_bpm"] = tempo_bpm
+        datos["tempo_bpm"] = round(float(tempo_bpm), 2)
+        if pulso_inicio is not None:
+            datos["pulso_inicio"] = round(float(pulso_inicio), 3)
     datos["versos"] = registros
     ruta = Path(ruta)
     ruta.write_text(
@@ -69,6 +75,13 @@ def guardar_json(ruta, titulo: str, versos: List[Verso], tempo_bpm: Optional[flo
         encoding="utf-8",
     )
     return ruta
+
+
+def pulso_de_json(ruta) -> Tuple[Optional[float], Optional[float]]:
+    """(tempo en BPM, segundo de un pulso de referencia) guardados en el JSON, o None."""
+    datos = json.loads(Path(ruta).read_text(encoding="utf-8"))
+    bpm, inicio = datos.get("tempo_bpm"), datos.get("pulso_inicio")
+    return (float(bpm) if bpm else None, float(inicio) if inicio is not None else None)
 
 
 def cargar_json(ruta) -> Tuple[str, List[Verso]]:
@@ -82,6 +95,6 @@ def cargar_json(ruta) -> Tuple[str, List[Verso]]:
         inicio, fin = float(v["inicio"]), float(v["fin"])
         if fin < inicio:
             raise ValueError(f"Verso {i} ({texto!r}): 'fin' es menor que 'inicio'")
-        versos.append(Verso(texto, inicio, fin, bool(v.get("nueva_pagina", False))))
+        versos.append(Verso(texto, inicio, fin, bool(v.get("nueva_pagina", False)), str(v.get("revisar", ""))))
     versos.sort(key=lambda v: v.inicio)
     return str(datos.get("titulo", "")).strip(), versos

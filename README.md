@@ -71,3 +71,36 @@ mueve el inicio de cada verso al **tiempo o medio tiempo más cercano** (muchos 
 - Si la canción no tiene un pulso claro (sin batería), no se toca nada y lo avisa.
 - Si el BPM detectado es el doble o la mitad del real, fuérzalo: `py -3.12 generar.py --cancion nombre --bpm 72`.
 - Para desactivarlo: `--sin-tempo`. No se aplica al rehacer desde un JSON ya revisado.
+
+## Revisión automática completa
+
+Cada canción nueva pasa sola por todas estas etapas (no hay que hacer nada distinto: Ctrl+Shift+B):
+
+1. **Reconocimiento** con Whisper y emparejamiento con tu letra (`.txt`).
+2. **Segunda pasada**: Whisper vuelve a alinear la **letra real**, palabra por palabra, por tramos
+   de 30 s. Corrige sobre todo los versos que en la primera pasada "no se escucharon".
+   (Con `--rapido` se omite: más rápido, menos preciso.)
+3. **Coros**: lo que se repite se canta igual. Con las repeticiones bien escuchadas se corrigen
+   los versos que no se oyeron en otra repetición.
+4. **Tempo**: ajuste de cada verso al pulso de la canción.
+5. **Informe**: si todo cuadra, dice *"los N versos pasaron todas las comprobaciones"*. Si no,
+   lista los dudosos (campo `"revisar"` en el JSON).
+
+Con tempo detectado, además, la animación va **al ritmo**: el texto se desplaza durante medio
+tiempo musical y llega en amarillo justo en el pulso en que empieza el verso.
+
+### Página de revisión (opcional)
+
+Junto a cada canción se crea `<canción>_revisar.html`. Ábrela con doble clic (Chrome o Edge):
+reproduce la canción, resalta el verso que suena y muestra en naranja los dudosos.
+
+| Tecla | Acción |
+|---|---|
+| Espacio | reproducir / pausa |
+| ↑ ↓ | elegir verso |
+| M | marcar ahora el inicio del verso elegido (se ajusta al pulso) y pasar al siguiente |
+| ← → | mover el inicio ±0,05 s (con Shift: medio tiempo) |
+| P | escuchar desde el verso elegido |
+
+Pulsa **Guardar JSON corregido**, guárdalo encima del JSON de la canción y rehaz el video
+(`py -3.12 generar.py --forzar --cancion nombre`).

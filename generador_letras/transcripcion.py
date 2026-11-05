@@ -5,8 +5,9 @@ import inspect
 import subprocess
 import sys
 import tempfile
+from contextlib import contextmanager
 from pathlib import Path
-from typing import Callable, List, Optional
+from typing import Callable, Dict, Iterator, List, Optional, Tuple
 
 from .alineacion import normalizar
 from .modelos import Palabra
@@ -16,6 +17,22 @@ PROMPT_BASE = (
     "Alabanza cristiana en español. Jesús, Señor, Dios, Espíritu Santo, Cristo, "
     "aleluya, gloria, Rey de reyes, cruz, gracia, amor, fe, santo."
 )
+
+# Modelos ya cargados (se reutilizan entre canciones y en la segunda pasada de alineación).
+_MODELOS: Dict[Tuple[str, bool], object] = {}
+_ULTIMO: Dict[str, object] = {}
+
+
+def modelo_en_memoria():
+    """El último modelo Whisper usado con éxito, o None."""
+    return _ULTIMO.get("modelo")
+
+
+def liberar_modelos() -> None:
+    """Olvida los modelos cargados (libera su memoria)."""
+    _MODELOS.clear()
+    _ULTIMO.clear()
+
 
 # Frases que Whisper inventa sobre silencios o música (se descartan).
 _ALUCINACIONES = (
@@ -164,9 +181,11 @@ def _transcribir_en(
 
     progreso(f"Cargando modelo Whisper '{modelo}' ({'GPU' if gpu else 'CPU'})...")
     try:
-        whisper = WhisperModel(
-            modelo, device="cuda" if gpu else "cpu", compute_type="int8_float16" if gpu else "int8"
-        )
+        whisper = _MODELOS.get((modelo, gpu))
+        if whisper is None:
+            whisper = WhisperModel(
+                modelo, device="cuda" if gpu else "cpu", compute_type="int8_float16" if gpu else "int8"
+            )
     except Exception as e:
         texto = str(e).lower()
         if any(x in texto for x in ("mkl_malloc", "allocate memory", "bad_alloc", "out of memory")):
@@ -214,7 +233,19 @@ def _transcribir_en(
             del_segmento[-1].corte = True
             palabras.extend(del_segmento)
     progreso(f"Palabras detectadas: {len(palabras)}")
+    _MODELOS[(modelo, gpu)] = whisper
+    _ULTIMO["modelo"] = whisper
     return palabras
+
+
+@contextmanager
+def audio_de_voz(audio: Path, separar: bool, progreso: Callable[[str], None] = print) -> Iterator[Path]:
+    """Da la ruta del audio a analizar: la voz aislada con Demucs si `separar`, o el original."""
+    if not separar:
+        yield audio
+        return
+    with tempfile.TemporaryDirectory(prefix="letras_demucs_") as tmp:
+        yield separar_voz(audio, Path(tmp), progreso) or audio
 
 
 def transcribir_audio_cancion(
@@ -224,9 +255,5 @@ def transcribir_audio_cancion(
     **opciones,
 ) -> List[Palabra]:
     """Como `transcribir`, aislando antes la voz si `separar` es True."""
-    progreso = opciones.get("progreso", print)
-    if not separar:
-        return transcribir(audio, **opciones)
-    with tempfile.TemporaryDirectory(prefix="letras_demucs_") as tmp:
-        voz = separar_voz(audio, Path(tmp), progreso)
-        return transcribir(voz or audio, **opciones)
+    with audio_de_voz(audio, separar, opciones.get("progreso", print)) as voz:
+        return transcribir(voz, **opciones)

@@ -118,8 +118,8 @@ class AnalisisDesdeAudio(unittest.TestCase):
     def test_ajusta_versos_de_una_cancion_con_bateria(self):
         y, reales = pista(80, semilla=7)
         versos = [Verso(str(i), round(reales[k] + 0.1, 2), reales[k] + 2) for i, k in enumerate((3, 7, 11, 15, 19))]
-        bpm = analizar_y_ajustar(self.wav(y), versos, progreso=lambda m: None)
-        self.assertAlmostEqual(bpm, 80, delta=1.0)
+        pulso = analizar_y_ajustar(self.wav(y), versos, progreso=lambda m: None)
+        self.assertAlmostEqual(pulso.bpm, 80, delta=1.0)
         for v, k in zip(versos, (3, 7, 11, 15, 19)):
             self.assertAlmostEqual(v.inicio, reales[k], delta=0.04)
 

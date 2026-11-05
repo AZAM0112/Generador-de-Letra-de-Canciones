@@ -37,6 +37,7 @@ def procesar_carpeta(
     dispositivo: str = "auto",
     ajustar_tempo: bool = True,
     bpm: Optional[float] = None,
+    segunda_pasada: bool = True,
     progreso=print,
 ) -> List[str]:
     """Procesa cada audio de la carpeta. Devuelve la lista de canciones que fallaron."""
@@ -75,7 +76,8 @@ def procesar_carpeta(
                 generar_video_letra(
                     audio, letra=txt if txt.exists() else None, modelo=modelo,
                     separar_voz=separar_voz, solo_json=solo_json, escala_letra=escala_letra,
-                    dispositivo=dispositivo, ajustar_tempo=ajustar_tempo, bpm=bpm, progreso=progreso,
+                    dispositivo=dispositivo, ajustar_tempo=ajustar_tempo, bpm=bpm,
+                    segunda_pasada=segunda_pasada, progreso=progreso,
                 )
         except Exception as e:  # una canción con problemas no detiene a las demás
             progreso(f"ERROR en {audio.name}: {e}")
@@ -95,13 +97,14 @@ def main(argv=None) -> int:
     p.add_argument("--solo-json", action="store_true", help="solo crea los JSON de letra para revisarlos")
     p.add_argument("--tamano-letra", type=float, default=1.0, metavar="X", help="multiplica el tamaño de la letra (por defecto 1.0; 0.8 = más chica, 1.2 = más grande si cabe)")
     p.add_argument("--dispositivo", choices=["auto", "cpu", "cuda"], default="auto", help="cpu fuerza el uso del procesador (si la GPU da problemas)")
+    p.add_argument("--rapido", action="store_true", help="omite la segunda pasada de alineación (más rápido, menos preciso)")
     p.add_argument("--sin-tempo", action="store_true", help="no ajusta los versos al pulso de la canción")
     p.add_argument("--bpm", type=float, help="fuerza el tempo en BPM (útil con --cancion)")
     a = p.parse_args(argv)
     try:
         fallidas = procesar_carpeta(
             a.carpeta, forzar=a.forzar, modelo=a.modelo, separar_voz=a.separar_voz, solo_json=a.solo_json, cancion=a.cancion, escala_letra=a.tamano_letra, dispositivo=a.dispositivo,
-            ajustar_tempo=not a.sin_tempo, bpm=a.bpm,
+            ajustar_tempo=not a.sin_tempo, bpm=a.bpm, segunda_pasada=not a.rapido,
         )
     except FileNotFoundError as e:
         print(f"Error: {e}", file=sys.stderr)

@@ -88,6 +88,7 @@ def palabras_a_versos(palabras: List[Palabra], cortar_por_pausa: bool = True) ->
             inicio = parte[0].inicio
             fin = max(parte[-1].fin, inicio + DURACION_MINIMA_VERSO)
             verso = Verso(texto, inicio, fin, pagina_nueva=parte[0].pagina_nueva and k == 0)
+            verso.confianza = sum(not p.estimada for p in parte) / len(parte)
             if parte[0].estimada:
                 verso.revisar = "no se reconoció en el audio: tiempo estimado"
             versos.append(verso)
