@@ -57,3 +57,17 @@ En la laptop con NVIDIA, instala una vez las librerías CUDA:
 py -3.12 -m pip install -r generador_letras\requirements-gpu.txt
 ```
 y mantén actualizado el driver de NVIDIA. En la otra laptop no hace falta.
+
+## Ajuste al tempo de la canción (automático)
+
+Después de sincronizar la letra, el programa detecta el **tempo (BPM)** y el pulso de la canción y
+mueve el inicio de cada verso al **tiempo o medio tiempo más cercano** (muchos versos entran en el
+"y" del compás). También corrige el retraso o adelanto general que suele tener el reconocimiento.
+
+- El JSON guarda `"tempo_bpm"` y, en los versos dudosos, un campo `"revisar"` con el motivo:
+  - `entre dos pulsos`: el inicio cae justo en medio; no se movió, revísalo a mano.
+  - `no se reconoció en el audio: tiempo estimado`: su primera palabra no se escuchó; el tiempo se calculó.
+  - `choca con el verso anterior`: dos versos irían al mismo pulso.
+- Si la canción no tiene un pulso claro (sin batería), no se toca nada y lo avisa.
+- Si el BPM detectado es el doble o la mitad del real, fuérzalo: `py -3.12 generar.py --cancion nombre --bpm 72`.
+- Para desactivarlo: `--sin-tempo`. No se aplica al rehacer desde un JSON ya revisado.

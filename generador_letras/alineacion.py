@@ -143,6 +143,8 @@ def alinear_letra(
     tiempos: List[Optional[Tuple[float, float]]] = [None] * len(letra)
     for i, j in pares:
         tiempos[i] = (detectadas[j].inicio, detectadas[j].fin)
+    for i, t in enumerate(tiempos):
+        letra[i].estimada = t is None
 
     i = 0
     while i < len(letra):

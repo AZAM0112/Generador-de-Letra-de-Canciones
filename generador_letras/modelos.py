@@ -4,7 +4,7 @@ from __future__ import annotations
 import json
 from dataclasses import dataclass
 from pathlib import Path
-from typing import List, Tuple
+from typing import List, Optional, Tuple
 
 
 @dataclass
@@ -16,6 +16,7 @@ class Palabra:
     fin: float
     corte: bool = False  # la palabra cierra un verso (fin de segmento o de línea)
     pagina_nueva: bool = False  # la palabra abre una estrofa nueva
+    estimada: bool = False  # no se reconoció en el audio: su tiempo se interpoló
 
 
 @dataclass
@@ -26,6 +27,7 @@ class Verso:
     inicio: float
     fin: float
     pagina_nueva: bool = False
+    revisar: str = ""  # motivo por el que conviene revisar este verso a mano
 
     @property
     def num_palabras(self) -> int:
@@ -47,17 +49,23 @@ class Pagina:
         return max(v.fin for v in self.versos)
 
 
-def guardar_json(ruta, titulo: str, versos: List[Verso]) -> Path:
+def guardar_json(ruta, titulo: str, versos: List[Verso], tempo_bpm: Optional[float] = None) -> Path:
     """Guarda la letra con sus tiempos en un JSON que se puede revisar y corregir a mano."""
     registros = []
     for v in versos:
         registro = {"inicio": round(v.inicio, 2), "fin": round(v.fin, 2), "texto": v.texto}
         if v.pagina_nueva:
             registro["nueva_pagina"] = True
+        if v.revisar:
+            registro["revisar"] = v.revisar
         registros.append(registro)
+    datos = {"titulo": titulo}
+    if tempo_bpm:
+        datos["tempo_bpm"] = tempo_bpm
+    datos["versos"] = registros
     ruta = Path(ruta)
     ruta.write_text(
-        json.dumps({"titulo": titulo, "versos": registros}, ensure_ascii=False, indent=2),
+        json.dumps(datos, ensure_ascii=False, indent=2),
         encoding="utf-8",
     )
     return ruta

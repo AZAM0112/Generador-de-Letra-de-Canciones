@@ -45,6 +45,8 @@ def generar_video_letra(
     escala_letra: float = 1.0,
     dispositivo: str = "auto",
     vad: bool = False,
+    ajustar_tempo: bool = True,
+    bpm: Optional[float] = None,
     progreso: Callable[[str], None] = print,
 ) -> Path:
     """Convierte el audio completo de una canción en un MP4 con la letra animada.
@@ -62,6 +64,9 @@ def generar_video_letra(
     escala_letra Multiplica el tamaño máximo de la letra (1.0 = grande; 0.8 = más chica). Siempre
                  se ajusta para que quepan los dos versos.
     solo_json    Solo genera el JSON de letra (para revisarlo) y no crea el video.
+    ajustar_tempo Detecta el tempo y ajusta el inicio de cada verso al pulso; marca con
+                 "revisar" en el JSON los versos dudosos. No se aplica con `desde_json`.
+    bpm          Fuerza el tempo (si la detección automática se equivoca).
 
     Devuelve la ruta del MP4 (o del JSON si `solo_json=True`).
     """
@@ -96,7 +101,12 @@ def generar_video_letra(
             versos = palabras_a_versos(palabras, cortar_por_pausa=False)
         else:
             versos = palabras_a_versos(detectadas)
-        guardar_json(ruta_json, titulo, versos)
+        tempo_bpm = None
+        if ajustar_tempo:
+            from .tempo import analizar_y_ajustar
+
+            tempo_bpm = analizar_y_ajustar(audio, versos, bpm=bpm, progreso=progreso)
+        guardar_json(ruta_json, titulo, versos, tempo_bpm)
         progreso(f"Letra y tiempos guardados en {ruta_json} (puedes corregirlos y usar --desde-json).")
         if solo_json:
             return ruta_json

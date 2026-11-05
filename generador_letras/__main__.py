@@ -46,6 +46,8 @@ def main(argv=None) -> int:
     p.add_argument("--fuente", help="archivo .ttf para el texto (por defecto, una fuente negrita del sistema)")
     p.add_argument("--fondo", type=_color, default=(0, 0, 0), metavar="#RRGGBB", help="color de fondo (por defecto negro)")
     p.add_argument("--tamano-letra", type=float, default=1.0, metavar="X", help="multiplica el tamaño de la letra (por defecto 1.0; 0.8 = más chica)")
+    p.add_argument("--sin-tempo", action="store_true", help="no ajusta los versos al pulso de la canción")
+    p.add_argument("--bpm", type=float, help="fuerza el tempo en BPM si la detección se equivoca")
     a = p.parse_args(argv)
 
     try:
@@ -53,6 +55,7 @@ def main(argv=None) -> int:
             a.audio, a.titulo, a.salida, letra=a.letra, modelo=a.modelo, idioma=a.idioma,
             separar_voz=a.separar_voz, desde_json=a.desde_json, solo_json=a.solo_json,
             resolucion=a.resolucion, fps=a.fps, fuente=a.fuente, fondo=a.fondo, escala_letra=a.tamano_letra,
+            ajustar_tempo=not a.sin_tempo, bpm=a.bpm,
             dispositivo=a.dispositivo, vad=a.vad,
         )
     except (FileNotFoundError, ValueError, RuntimeError) as e:
