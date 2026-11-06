@@ -113,6 +113,52 @@ class Transcribir(unittest.TestCase):
         self.assertEqual([c[0] for c in _ModeloFalso.llamadas].count("init"), 1)
         self.assertIsInstance(transcripcion.modelo_en_memoria(), _ModeloFalso)
 
+    def test_sin_memoria_en_gpu_prueba_medium_en_gpu_antes_que_la_cpu(self):
+        intentos = []
+
+        class Modelo(_ModeloFalso):
+            def __init__(self, nombre, device="cpu", compute_type="default", **kw):
+                intentos.append((nombre, device))
+                if nombre == "large-v3":
+                    raise RuntimeError("CUDA failed with error out of memory")
+
+        sys.modules["faster_whisper"].WhisperModel = Modelo
+        mensajes = []
+        with mock.patch.object(transcripcion, "hay_gpu", return_value=True):
+            ps = transcripcion.transcribir(Path("x.mp3"), progreso=mensajes.append)
+        self.assertEqual(intentos, [("large-v3", "cuda"), ("medium", "cuda")])
+        self.assertEqual(len(ps), 5)
+        self.assertTrue(any("out of memory" in m and "'medium' en la GPU" in m for m in mensajes))
+
+    def test_el_aviso_muestra_el_error_real_de_la_gpu(self):
+        class Modelo(_ModeloFalso):
+            def __init__(self, nombre, device="cpu", **kw):
+                if device == "cuda":
+                    raise RuntimeError("Could not load library cudnn_ops64_9.dll. Error code 126")
+
+        sys.modules["faster_whisper"].WhisperModel = Modelo
+        mensajes = []
+        with mock.patch.object(transcripcion, "hay_gpu", return_value=True):
+            transcripcion.transcribir(Path("x.mp3"), progreso=mensajes.append)
+        self.assertTrue(any("cudnn_ops64_9.dll" in m and "CPU" in m for m in mensajes))
+
+    def test_usa_el_modelo_descargado_sin_internet_y_descarga_solo_si_falta(self):
+        llamadas = []
+
+        class Modelo(_ModeloFalso):
+            def __init__(self, nombre, device="cpu", compute_type="default", local_files_only=False, **kw):
+                llamadas.append(local_files_only)
+                if local_files_only and nombre == "small":
+                    raise FileNotFoundError("no está en la caché")
+
+        sys.modules["faster_whisper"].WhisperModel = Modelo
+        mensajes = []
+        transcripcion.transcribir(Path("x.mp3"), progreso=mensajes.append)  # 'medium' ya descargado
+        self.assertEqual(llamadas, [True])
+        transcripcion.transcribir(Path("x.mp3"), modelo="small", progreso=mensajes.append)
+        self.assertEqual(llamadas, [True, True, False])
+        self.assertTrue(any("Descargando el modelo 'small'" in m for m in mensajes))
+
     def test_opciones_para_cantos(self):
         transcripcion.transcribir(Path("x.mp3"), idioma="es", prompt="Aleluya", progreso=lambda m: None)
         opciones = _ModeloFalso.llamadas[1][2]

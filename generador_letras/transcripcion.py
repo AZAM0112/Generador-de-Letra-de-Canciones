@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import inspect
+import os
 import subprocess
 import sys
 import tempfile
@@ -11,6 +12,11 @@ from typing import Callable, Dict, Iterator, List, Optional, Tuple
 
 from .alineacion import normalizar
 from .modelos import Palabra
+
+# Silencia avisos de la librería de descargas que no indican ningún problema (symlinks en
+# Windows, peticiones sin token). Debe hacerse antes de importar faster-whisper.
+os.environ.setdefault("HF_HUB_DISABLE_SYMLINKS_WARNING", "1")
+os.environ.setdefault("HF_HUB_VERBOSITY", "error")
 
 # Vocabulario cristiano: ayuda a Whisper a escribir bien estas palabras.
 PROMPT_BASE = (
@@ -128,8 +134,13 @@ def separar_voz(
     return voz
 
 
-_SEÑALES_CUDA = ("cublas", "cudnn", "cuda", "libcu", "nvcuda", "nvrtc", "out of memory", "compute type",
-                   "mkl_malloc", "allocate memory", "bad_alloc")
+_SEÑALES_MEMORIA = ("out of memory", "mkl_malloc", "allocate memory", "bad_alloc")
+_SEÑALES_CUDA = ("cublas", "cudnn", "cuda", "libcu", "nvcuda", "nvrtc", "compute type") + _SEÑALES_MEMORIA
+
+
+def _resumen_error(e: Exception) -> str:
+    lineas = [l.strip() for l in str(e).splitlines() if l.strip()]
+    return (lineas[0] if lineas else type(e).__name__)[:200]
 
 
 def transcribir(
@@ -149,16 +160,31 @@ def transcribir(
     """
     gpu = hay_gpu() if dispositivo == "auto" else dispositivo == "cuda"
     opciones = dict(idioma=idioma, prompt=prompt, vad=vad, progreso=progreso)
+    elegido = modelo or ("large-v3" if gpu else "medium")
     try:
-        return _transcribir_en(audio, gpu=gpu, modelo=modelo or ("large-v3" if gpu else "medium"), **opciones)
+        return _transcribir_en(audio, gpu=gpu, modelo=elegido, **opciones)
     except Exception as e:
         if not (gpu and dispositivo == "auto" and any(x in str(e).lower() for x in _SEÑALES_CUDA)):
             raise
+        error = e
+    # Sin memoria suficiente para el modelo grande: la GPU con 'medium' sigue siendo mucho
+    # más rápida que la CPU, así que se intenta antes de bajar a la CPU.
+    if any(x in str(error).lower() for x in _SEÑALES_MEMORIA) and elegido != "medium":
         progreso(
-            "AVISO: la GPU no se pudo usar (faltan las librerías CUDA, no hay memoria suficiente o no es compatible). "
-            "Se continúa con la CPU, que es más lenta."
+            f"AVISO: no hay memoria suficiente para '{elegido}' ({_resumen_error(error)}). "
+            "Se intenta con 'medium' en la GPU."
         )
-        return _transcribir_en(audio, gpu=False, modelo=modelo or "medium", **opciones)
+        try:
+            return _transcribir_en(audio, gpu=True, modelo="medium", **opciones)
+        except Exception as e:
+            if not any(x in str(e).lower() for x in _SEÑALES_CUDA):
+                raise
+            error = e
+    progreso(
+        f"AVISO: la GPU no se pudo usar ({_resumen_error(error)}). "
+        "Se continúa con la CPU, que es más lenta."
+    )
+    return _transcribir_en(audio, gpu=False, modelo=modelo or "medium", **opciones)
 
 
 def _transcribir_en(
@@ -183,9 +209,12 @@ def _transcribir_en(
     try:
         whisper = _MODELOS.get((modelo, gpu))
         if whisper is None:
-            whisper = WhisperModel(
-                modelo, device="cuda" if gpu else "cpu", compute_type="int8_float16" if gpu else "int8"
-            )
+            ajustes = dict(device="cuda" if gpu else "cpu", compute_type="int8_float16" if gpu else "int8")
+            try:  # si ya se descargó, se usa sin consultar internet (funciona sin conexión)
+                whisper = WhisperModel(modelo, local_files_only=True, **ajustes)
+            except FileNotFoundError:
+                progreso(f"Descargando el modelo '{modelo}' (solo la primera vez; puede tardar)...")
+                whisper = WhisperModel(modelo, **ajustes)
     except Exception as e:
         texto = str(e).lower()
         if any(x in texto for x in ("mkl_malloc", "allocate memory", "bad_alloc", "out of memory")):
